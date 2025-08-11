@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cowsay-api
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: cowsay-api
+  template:
+    metadata:
+      labels:
+        app: cowsay-api
+    spec:
+      containers:
+      - name: cowsay-api
+        image: lhitchon/cowsay-temporal:latest
+        command: ["python", "app.py", "--mode", "api"]
+        env:
+        - name: TEMPORAL_HOST
+          value: temporal-frontend-headless.temporal-system.svc.cluster.local:7233

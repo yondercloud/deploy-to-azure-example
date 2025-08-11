@@ -1,0 +1,1 @@
+az bicep build --file infrastructure/main.bicep --outfile infrastructure/main.json

@@ -1,0 +1,54 @@
+---
+# Source: temporal/templates/web-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: temporal-web
+  annotations:
+    
+  labels:
+    app.kubernetes.io/component: web
+    app.kubernetes.io/name: temporal
+    helm.sh/chart: temporal-0.65.0
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: temporal
+    app.kubernetes.io/version: "1.28.1"
+    app.kubernetes.io/part-of: temporal
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: temporal
+      app.kubernetes.io/instance: temporal
+      app.kubernetes.io/component: web
+  template:
+    metadata:
+      annotations:
+        
+      labels:
+        app.kubernetes.io/component: web
+        app.kubernetes.io/name: temporal
+        helm.sh/chart: temporal-0.65.0
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/instance: temporal
+        app.kubernetes.io/version: "1.28.1"
+        app.kubernetes.io/part-of: temporal
+    spec:
+      serviceAccountName: default
+      containers:
+        - name: temporal-web
+          image: "temporalio/ui:2.39.0"
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: TEMPORAL_ADDRESS
+              value: "temporal-frontend.temporal-system.svc:7233"
+          livenessProbe:
+            initialDelaySeconds: 10
+            tcpSocket:
+              port: http
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          resources:
+            {}

@@ -1,0 +1,30 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: temporal-system
+
+resources:
+  # Namespace
+  - namespace.yaml
+  # Temporal core components
+  - temporal-manifests/temporal/templates/admintools-deployment.yaml
+  - temporal-manifests/temporal/templates/server-configmap.yaml
+  - temporal-manifests/temporal/templates/server-deployment.yaml
+  - temporal-manifests/temporal/templates/server-dynamicconfigmap.yaml
+  - temporal-manifests/temporal/templates/server-job.yaml
+  - temporal-manifests/temporal/templates/server-pdb.yaml
+  - temporal-manifests/temporal/templates/server-secret.yaml
+  - temporal-manifests/temporal/templates/server-service.yaml
+  - temporal-manifests/temporal/templates/web-deployment.yaml
+  - temporal-manifests/temporal/templates/web-service.yaml
+  # Cassandra dependency
+  - temporal-manifests/temporal/charts/cassandra/templates/service.yaml
+  - temporal-manifests/temporal/charts/cassandra/templates/statefulset.yaml
+  # Elasticsearch dependency
+  - temporal-manifests/temporal/charts/elasticsearch/templates/poddisruptionbudget.yaml
+  - temporal-manifests/temporal/charts/elasticsearch/templates/service.yaml
+  - temporal-manifests/temporal/charts/elasticsearch/templates/statefulset.yaml
+
+commonLabels:
+  app.kubernetes.io/name: temporal
+  app.kubernetes.io/managed-by: flux

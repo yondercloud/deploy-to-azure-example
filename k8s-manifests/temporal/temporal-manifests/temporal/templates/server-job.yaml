@@ -1,0 +1,143 @@
+---
+# Source: temporal/templates/server-job.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: temporal-schema-1
+  labels:
+    app.kubernetes.io/component: database
+    app.kubernetes.io/name: temporal
+    helm.sh/chart: temporal-0.65.0
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: temporal
+    app.kubernetes.io/version: "1.28.1"
+    app.kubernetes.io/part-of: temporal
+spec:
+  backoffLimit: 100
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      name: temporal-schema-1
+      labels:
+        app.kubernetes.io/component: database
+        app.kubernetes.io/name: temporal
+        helm.sh/chart: temporal-0.65.0
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/instance: temporal
+        app.kubernetes.io/version: "1.28.1"
+        app.kubernetes.io/part-of: temporal
+    spec:
+      serviceAccountName: default
+      restartPolicy: OnFailure
+      initContainers:
+        - name: check-cassandra
+          image: "cassandra:3.11.3"
+          imagePullPolicy: IfNotPresent
+          command: ['sh', '-c', 'until cqlsh temporal-cassandra.temporal-system 9042 -e "SHOW VERSION"; do echo waiting for cassandra to start; sleep 1; done;']
+        - name: check-elasticsearch
+          image: "temporalio/admin-tools:1.28.1-tctl-1.18.4-cli-1.4.1"
+          imagePullPolicy: IfNotPresent
+          command: ['sh', '-c', 'until curl --silent --fail --user "$ES_USER:$ES_PWD" $ES_SCHEME://$ES_HOST:$ES_PORT 2>&1 > /dev/null; do echo waiting for elasticsearch to start; sleep 1; done;']
+          env:
+            - name: ES_SCHEME
+              value: http
+            - name: ES_HOST
+              value: elasticsearch-master-headless
+            - name: ES_PORT
+              value: "9200"
+            - name: ES_USER
+              value: ""
+            - name: ES_PWD
+              valueFrom:
+                secretKeyRef:
+                  name: temporal-visibility-store
+                  key: password
+            - name: ES_VERSION
+              value: v7
+            - name: ES_VISIBILITY_INDEX
+              value: temporal_visibility_v1_dev
+        - name: create-default-store
+          image: "temporalio/admin-tools:1.28.1-tctl-1.18.4-cli-1.4.1"
+          imagePullPolicy: IfNotPresent
+          command: ['temporal-cassandra-tool', 'create', '-k', 'temporal', '--replication-factor', '1']
+          env:
+            - name: CASSANDRA_HOST
+              value: temporal-cassandra.temporal-system
+            - name: CASSANDRA_PORT
+              value: "9042"
+            - name: CASSANDRA_KEYSPACE
+              value: temporal
+            - name: CASSANDRA_USER
+              value: user
+            - name: CASSANDRA_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: temporal-default-store
+                  key: password
+        - name: setup-default-store
+          image: "temporalio/admin-tools:1.28.1-tctl-1.18.4-cli-1.4.1"
+          imagePullPolicy: IfNotPresent
+          command: ['temporal-cassandra-tool', 'setup-schema', '-v', '0.0']
+          env:
+            - name: CASSANDRA_HOST
+              value: temporal-cassandra.temporal-system
+            - name: CASSANDRA_PORT
+              value: "9042"
+            - name: CASSANDRA_KEYSPACE
+              value: temporal
+            - name: CASSANDRA_USER
+              value: user
+            - name: CASSANDRA_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: temporal-default-store
+                  key: password
+        - name: setup-visibility-store
+          image: "temporalio/admin-tools:1.28.1-tctl-1.18.4-cli-1.4.1"
+          imagePullPolicy: IfNotPresent
+          command: ['sh', '-c']
+          args:
+            - 'curl -X PUT --fail --user "$ES_USER:$ES_PWD" $ES_SCHEME://$ES_HOST:$ES_PORT/_template/temporal_visibility_v1_template -H "Content-Type: application/json" --data-binary "@schema/elasticsearch/visibility/index_template_$ES_VERSION.json" 2>&1 &&
+              curl --head --fail --user "$ES_USER:$ES_PWD" $ES_SCHEME://$ES_HOST:$ES_PORT/$ES_VISIBILITY_INDEX 2>&1 ||
+              curl -X PUT --fail --user "$ES_USER:$ES_PWD" $ES_SCHEME://$ES_HOST:$ES_PORT/$ES_VISIBILITY_INDEX 2>&1'
+          env:
+            - name: ES_SCHEME
+              value: http
+            - name: ES_HOST
+              value: elasticsearch-master-headless
+            - name: ES_PORT
+              value: "9200"
+            - name: ES_USER
+              value: ""
+            - name: ES_PWD
+              valueFrom:
+                secretKeyRef:
+                  name: temporal-visibility-store
+                  key: password
+            - name: ES_VERSION
+              value: v7
+            - name: ES_VISIBILITY_INDEX
+              value: temporal_visibility_v1_dev
+        - name: update-default-store
+          image: "temporalio/admin-tools:1.28.1-tctl-1.18.4-cli-1.4.1"
+          imagePullPolicy: IfNotPresent
+          command: ['temporal-cassandra-tool', 'update-schema', '--schema-dir', '/etc/temporal/schema/cassandra/temporal/versioned']
+          env:
+            - name: CASSANDRA_HOST
+              value: temporal-cassandra.temporal-system
+            - name: CASSANDRA_PORT
+              value: "9042"
+            - name: CASSANDRA_KEYSPACE
+              value: temporal
+            - name: CASSANDRA_USER
+              value: user
+            - name: CASSANDRA_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: temporal-default-store
+                  key: password
+      containers:
+        - name: done
+          image: "temporalio/admin-tools:1.28.1-tctl-1.18.4-cli-1.4.1"
+          imagePullPolicy: IfNotPresent
+          command: ['sh', '-c', 'echo "Store setup completed"']

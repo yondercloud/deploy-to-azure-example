@@ -1,0 +1,513 @@
+---
+# Source: temporal/templates/server-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: temporal-frontend
+  annotations:
+    
+  labels:
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/name: temporal
+    helm.sh/chart: temporal-0.65.0
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: temporal
+    app.kubernetes.io/version: "1.28.1"
+    app.kubernetes.io/part-of: temporal
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: temporal
+      app.kubernetes.io/instance: temporal
+      app.kubernetes.io/component: frontend
+  template:
+    metadata:
+      annotations:
+        checksum/config: edc9fd8ba9dcba7c7485e64161b0ba9596db695cb080f66d5283bfd97de4f0a7
+        prometheus.io/job: temporal-frontend
+        prometheus.io/scrape: 'true'
+        prometheus.io/port: '9090'
+        
+      labels:
+        app.kubernetes.io/component: frontend
+        app.kubernetes.io/name: temporal
+        helm.sh/chart: temporal-0.65.0
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/instance: temporal
+        app.kubernetes.io/version: "1.28.1"
+        app.kubernetes.io/part-of: temporal
+    spec:
+      serviceAccountName: default
+      securityContext:
+        fsGroup: 1000
+        runAsUser: 1000
+      initContainers:
+        - name: check-cassandra
+          image: "cassandra:3.11.3"
+          imagePullPolicy: IfNotPresent
+          command: ['sh', '-c', 'until cqlsh temporal-cassandra.temporal-system 9042 -e "SHOW VERSION"; do echo waiting for cassandra to start; sleep 1; done;']
+        - name: check-cassandra-temporal-schema
+          image: "cassandra:3.11.3"
+          imagePullPolicy: IfNotPresent
+          command: ['sh', '-c', 'until cqlsh temporal-cassandra.temporal-system 9042 -e "SELECT keyspace_name FROM system_schema.keyspaces" | grep temporal$; do echo waiting for default keyspace to become ready; sleep 1; done;']
+        - name: check-elasticsearch-index
+          image: "temporalio/admin-tools:1.28.1-tctl-1.18.4-cli-1.4.1"
+          imagePullPolicy: IfNotPresent
+          command: ['sh', '-c', 'until curl --silent --fail --user "$ES_USER:$ES_PWD" $ES_SCHEME://$ES_HOST:$ES_PORT/$ES_VISIBILITY_INDEX 2>&1 > /dev/null; do echo waiting for elasticsearch index to become ready; sleep 1; done;']
+          env:
+            - name: ES_SCHEME
+              value: http
+            - name: ES_HOST
+              value: elasticsearch-master-headless
+            - name: ES_PORT
+              value: "9200"
+            - name: ES_USER
+              value: ""
+            - name: ES_PWD
+              valueFrom:
+                secretKeyRef:
+                  name: temporal-visibility-store
+                  key: password
+            - name: ES_VERSION
+              value: v7
+            - name: ES_VISIBILITY_INDEX
+              value: temporal_visibility_v1_dev
+      containers:
+        - name: temporal-frontend
+          image: "temporalio/server:1.28.1"
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: SERVICES
+              value: frontend
+            - name: TEMPORAL_STORE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: temporal-default-store
+                  key: password
+            - name: TEMPORAL_VISIBILITY_STORE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: temporal-visibility-store
+                  key: password
+          # For Istio service mesh - make sure ports are defined here and in the headless service, see:
+          # https://istio.io/latest/docs/ops/configuration/traffic-management/traffic-routing/#headless-services
+          ports:
+            - name: rpc
+              containerPort: 7233
+              protocol: TCP
+            - name: membership
+              containerPort: 6933
+              protocol: TCP
+            - name: http
+              containerPort: 7243
+              protocol: TCP
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+          livenessProbe:
+             initialDelaySeconds: 150
+             tcpSocket:
+               port: rpc
+          volumeMounts:
+            - name: config
+              mountPath: /etc/temporal/config/config_template.yaml
+              subPath: config_template.yaml
+            - name: dynamic-config
+              mountPath: /etc/temporal/dynamic_config
+          resources:
+            {}
+      volumes:
+        - name: config
+          configMap:
+            name: "temporal-config"
+        - name: dynamic-config
+          configMap:
+            name: "temporal-dynamic-config"
+            items:
+            - key: dynamic_config.yaml
+              path: dynamic_config.yaml
+---
+# Source: temporal/templates/server-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: temporal-history
+  annotations:
+    
+  labels:
+    app.kubernetes.io/component: history
+    app.kubernetes.io/name: temporal
+    helm.sh/chart: temporal-0.65.0
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: temporal
+    app.kubernetes.io/version: "1.28.1"
+    app.kubernetes.io/part-of: temporal
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: temporal
+      app.kubernetes.io/instance: temporal
+      app.kubernetes.io/component: history
+  template:
+    metadata:
+      annotations:
+        checksum/config: edc9fd8ba9dcba7c7485e64161b0ba9596db695cb080f66d5283bfd97de4f0a7
+        prometheus.io/job: temporal-history
+        prometheus.io/scrape: 'true'
+        prometheus.io/port: '9090'
+        
+      labels:
+        app.kubernetes.io/component: history
+        app.kubernetes.io/name: temporal
+        helm.sh/chart: temporal-0.65.0
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/instance: temporal
+        app.kubernetes.io/version: "1.28.1"
+        app.kubernetes.io/part-of: temporal
+    spec:
+      serviceAccountName: default
+      securityContext:
+        fsGroup: 1000
+        runAsUser: 1000
+      initContainers:
+        - name: check-cassandra
+          image: "cassandra:3.11.3"
+          imagePullPolicy: IfNotPresent
+          command: ['sh', '-c', 'until cqlsh temporal-cassandra.temporal-system 9042 -e "SHOW VERSION"; do echo waiting for cassandra to start; sleep 1; done;']
+        - name: check-cassandra-temporal-schema
+          image: "cassandra:3.11.3"
+          imagePullPolicy: IfNotPresent
+          command: ['sh', '-c', 'until cqlsh temporal-cassandra.temporal-system 9042 -e "SELECT keyspace_name FROM system_schema.keyspaces" | grep temporal$; do echo waiting for default keyspace to become ready; sleep 1; done;']
+        - name: check-elasticsearch-index
+          image: "temporalio/admin-tools:1.28.1-tctl-1.18.4-cli-1.4.1"
+          imagePullPolicy: IfNotPresent
+          command: ['sh', '-c', 'until curl --silent --fail --user "$ES_USER:$ES_PWD" $ES_SCHEME://$ES_HOST:$ES_PORT/$ES_VISIBILITY_INDEX 2>&1 > /dev/null; do echo waiting for elasticsearch index to become ready; sleep 1; done;']
+          env:
+            - name: ES_SCHEME
+              value: http
+            - name: ES_HOST
+              value: elasticsearch-master-headless
+            - name: ES_PORT
+              value: "9200"
+            - name: ES_USER
+              value: ""
+            - name: ES_PWD
+              valueFrom:
+                secretKeyRef:
+                  name: temporal-visibility-store
+                  key: password
+            - name: ES_VERSION
+              value: v7
+            - name: ES_VISIBILITY_INDEX
+              value: temporal_visibility_v1_dev
+      containers:
+        - name: temporal-history
+          image: "temporalio/server:1.28.1"
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: SERVICES
+              value: history
+            - name: TEMPORAL_STORE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: temporal-default-store
+                  key: password
+            - name: TEMPORAL_VISIBILITY_STORE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: temporal-visibility-store
+                  key: password
+          # For Istio service mesh - make sure ports are defined here and in the headless service, see:
+          # https://istio.io/latest/docs/ops/configuration/traffic-management/traffic-routing/#headless-services
+          ports:
+            - name: rpc
+              containerPort: 7234
+              protocol: TCP
+            - name: membership
+              containerPort: 6934
+              protocol: TCP
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+          livenessProbe:
+             initialDelaySeconds: 150
+             tcpSocket:
+               port: rpc
+          volumeMounts:
+            - name: config
+              mountPath: /etc/temporal/config/config_template.yaml
+              subPath: config_template.yaml
+            - name: dynamic-config
+              mountPath: /etc/temporal/dynamic_config
+          resources:
+            {}
+      volumes:
+        - name: config
+          configMap:
+            name: "temporal-config"
+        - name: dynamic-config
+          configMap:
+            name: "temporal-dynamic-config"
+            items:
+            - key: dynamic_config.yaml
+              path: dynamic_config.yaml
+---
+# Source: temporal/templates/server-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: temporal-matching
+  annotations:
+    
+  labels:
+    app.kubernetes.io/component: matching
+    app.kubernetes.io/name: temporal
+    helm.sh/chart: temporal-0.65.0
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: temporal
+    app.kubernetes.io/version: "1.28.1"
+    app.kubernetes.io/part-of: temporal
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: temporal
+      app.kubernetes.io/instance: temporal
+      app.kubernetes.io/component: matching
+  template:
+    metadata:
+      annotations:
+        checksum/config: edc9fd8ba9dcba7c7485e64161b0ba9596db695cb080f66d5283bfd97de4f0a7
+        
+      labels:
+        app.kubernetes.io/component: matching
+        app.kubernetes.io/name: temporal
+        helm.sh/chart: temporal-0.65.0
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/instance: temporal
+        app.kubernetes.io/version: "1.28.1"
+        app.kubernetes.io/part-of: temporal
+    spec:
+      serviceAccountName: default
+      securityContext:
+        fsGroup: 1000
+        runAsUser: 1000
+      initContainers:
+        - name: check-cassandra
+          image: "cassandra:3.11.3"
+          imagePullPolicy: IfNotPresent
+          command: ['sh', '-c', 'until cqlsh temporal-cassandra.temporal-system 9042 -e "SHOW VERSION"; do echo waiting for cassandra to start; sleep 1; done;']
+        - name: check-cassandra-temporal-schema
+          image: "cassandra:3.11.3"
+          imagePullPolicy: IfNotPresent
+          command: ['sh', '-c', 'until cqlsh temporal-cassandra.temporal-system 9042 -e "SELECT keyspace_name FROM system_schema.keyspaces" | grep temporal$; do echo waiting for default keyspace to become ready; sleep 1; done;']
+        - name: check-elasticsearch-index
+          image: "temporalio/admin-tools:1.28.1-tctl-1.18.4-cli-1.4.1"
+          imagePullPolicy: IfNotPresent
+          command: ['sh', '-c', 'until curl --silent --fail --user "$ES_USER:$ES_PWD" $ES_SCHEME://$ES_HOST:$ES_PORT/$ES_VISIBILITY_INDEX 2>&1 > /dev/null; do echo waiting for elasticsearch index to become ready; sleep 1; done;']
+          env:
+            - name: ES_SCHEME
+              value: http
+            - name: ES_HOST
+              value: elasticsearch-master-headless
+            - name: ES_PORT
+              value: "9200"
+            - name: ES_USER
+              value: ""
+            - name: ES_PWD
+              valueFrom:
+                secretKeyRef:
+                  name: temporal-visibility-store
+                  key: password
+            - name: ES_VERSION
+              value: v7
+            - name: ES_VISIBILITY_INDEX
+              value: temporal_visibility_v1_dev
+      containers:
+        - name: temporal-matching
+          image: "temporalio/server:1.28.1"
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: SERVICES
+              value: matching
+            - name: TEMPORAL_STORE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: temporal-default-store
+                  key: password
+            - name: TEMPORAL_VISIBILITY_STORE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: temporal-visibility-store
+                  key: password
+          # For Istio service mesh - make sure ports are defined here and in the headless service, see:
+          # https://istio.io/latest/docs/ops/configuration/traffic-management/traffic-routing/#headless-services
+          ports:
+            - name: rpc
+              containerPort: 7235
+              protocol: TCP
+            - name: membership
+              containerPort: 6935
+              protocol: TCP
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+          livenessProbe:
+             initialDelaySeconds: 150
+             tcpSocket:
+               port: rpc
+          volumeMounts:
+            - name: config
+              mountPath: /etc/temporal/config/config_template.yaml
+              subPath: config_template.yaml
+            - name: dynamic-config
+              mountPath: /etc/temporal/dynamic_config
+          resources:
+            {}
+      volumes:
+        - name: config
+          configMap:
+            name: "temporal-config"
+        - name: dynamic-config
+          configMap:
+            name: "temporal-dynamic-config"
+            items:
+            - key: dynamic_config.yaml
+              path: dynamic_config.yaml
+---
+# Source: temporal/templates/server-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: temporal-worker
+  annotations:
+    
+  labels:
+    app.kubernetes.io/component: worker
+    app.kubernetes.io/name: temporal
+    helm.sh/chart: temporal-0.65.0
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: temporal
+    app.kubernetes.io/version: "1.28.1"
+    app.kubernetes.io/part-of: temporal
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: temporal
+      app.kubernetes.io/instance: temporal
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      annotations:
+        checksum/config: edc9fd8ba9dcba7c7485e64161b0ba9596db695cb080f66d5283bfd97de4f0a7
+        prometheus.io/job: temporal-worker
+        prometheus.io/scrape: 'true'
+        prometheus.io/port: '9090'
+        
+      labels:
+        app.kubernetes.io/component: worker
+        app.kubernetes.io/name: temporal
+        helm.sh/chart: temporal-0.65.0
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/instance: temporal
+        app.kubernetes.io/version: "1.28.1"
+        app.kubernetes.io/part-of: temporal
+    spec:
+      serviceAccountName: default
+      securityContext:
+        fsGroup: 1000
+        runAsUser: 1000
+      initContainers:
+        - name: check-cassandra
+          image: "cassandra:3.11.3"
+          imagePullPolicy: IfNotPresent
+          command: ['sh', '-c', 'until cqlsh temporal-cassandra.temporal-system 9042 -e "SHOW VERSION"; do echo waiting for cassandra to start; sleep 1; done;']
+        - name: check-cassandra-temporal-schema
+          image: "cassandra:3.11.3"
+          imagePullPolicy: IfNotPresent
+          command: ['sh', '-c', 'until cqlsh temporal-cassandra.temporal-system 9042 -e "SELECT keyspace_name FROM system_schema.keyspaces" | grep temporal$; do echo waiting for default keyspace to become ready; sleep 1; done;']
+        - name: check-elasticsearch-index
+          image: "temporalio/admin-tools:1.28.1-tctl-1.18.4-cli-1.4.1"
+          imagePullPolicy: IfNotPresent
+          command: ['sh', '-c', 'until curl --silent --fail --user "$ES_USER:$ES_PWD" $ES_SCHEME://$ES_HOST:$ES_PORT/$ES_VISIBILITY_INDEX 2>&1 > /dev/null; do echo waiting for elasticsearch index to become ready; sleep 1; done;']
+          env:
+            - name: ES_SCHEME
+              value: http
+            - name: ES_HOST
+              value: elasticsearch-master-headless
+            - name: ES_PORT
+              value: "9200"
+            - name: ES_USER
+              value: ""
+            - name: ES_PWD
+              valueFrom:
+                secretKeyRef:
+                  name: temporal-visibility-store
+                  key: password
+            - name: ES_VERSION
+              value: v7
+            - name: ES_VISIBILITY_INDEX
+              value: temporal_visibility_v1_dev
+      containers:
+        - name: temporal-worker
+          image: "temporalio/server:1.28.1"
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: SERVICES
+              value: worker
+            - name: TEMPORAL_STORE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: temporal-default-store
+                  key: password
+            - name: TEMPORAL_VISIBILITY_STORE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: temporal-visibility-store
+                  key: password
+          # For Istio service mesh - make sure ports are defined here and in the headless service, see:
+          # https://istio.io/latest/docs/ops/configuration/traffic-management/traffic-routing/#headless-services
+          ports:
+            - name: membership
+              containerPort: 6939
+              protocol: TCP
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+          volumeMounts:
+            - name: config
+              mountPath: /etc/temporal/config/config_template.yaml
+              subPath: config_template.yaml
+            - name: dynamic-config
+              mountPath: /etc/temporal/dynamic_config
+          resources:
+            {}
+      volumes:
+        - name: config
+          configMap:
+            name: "temporal-config"
+        - name: dynamic-config
+          configMap:
+            name: "temporal-dynamic-config"
+            items:
+            - key: dynamic_config.yaml
+              path: dynamic_config.yaml

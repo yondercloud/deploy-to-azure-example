@@ -1,0 +1,27 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "clusterName": {
+        "value": "azure-example"
+      },
+      "location": {
+        "value": "westus"
+      },
+      "nodeCount": {
+        "value": 1
+      },
+      "gitRepoUrl": {
+        "value": "https://github.com/yondercloud/azure-example.git"
+      },
+      "gitBranch": {
+        "value": "main"
+      },
+      "gitPath": {
+        "value": "./k8s-manifests/"
+      },
+      "gitAuthType": {
+        "value": "https"
+      }
+    }
+  }

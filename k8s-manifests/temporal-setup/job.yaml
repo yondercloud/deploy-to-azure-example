@@ -1,0 +1,33 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: temporal-setup
+  namespace: temporal-system
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      initContainers:
+      - name: wait-for-temporal
+        image: busybox:latest
+        command: ["sh", "-c"]
+        args:
+        - |
+          while ! nc -z temporal-frontend.temporal-system.svc.cluster.local 7233; do
+            echo "Waiting for temporal-frontend to be ready..."
+            sleep 5
+          done
+          echo "Temporal-frontend is ready"
+
+      containers:
+      - name: temporal-setup
+        image: temporalio/temporal:latest
+        command: 
+        - "temporal" 
+        - "--address"
+        - "temporal-frontend-headless.temporal-system.svc.cluster.local:7233"
+        - "--namespace"
+        - "default"
+        - "operator"
+        - "namespace"
+        - "create"

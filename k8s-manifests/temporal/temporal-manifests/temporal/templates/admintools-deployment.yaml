@@ -1,0 +1,54 @@
+---
+# Source: temporal/templates/admintools-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: temporal-admintools
+  annotations:
+    
+  labels:
+    app.kubernetes.io/component: admintools
+    app.kubernetes.io/name: temporal
+    helm.sh/chart: temporal-0.65.0
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: temporal
+    app.kubernetes.io/version: "1.28.1"
+    app.kubernetes.io/part-of: temporal
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: temporal
+      app.kubernetes.io/instance: temporal
+      app.kubernetes.io/component: admintools
+  template:
+    metadata:
+      annotations:
+        
+      labels:
+        app.kubernetes.io/component: admintools
+        app.kubernetes.io/name: temporal
+        helm.sh/chart: temporal-0.65.0
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/instance: temporal
+        app.kubernetes.io/version: "1.28.1"
+        app.kubernetes.io/part-of: temporal
+    spec:
+      serviceAccountName: default
+      containers:
+        - name: admin-tools
+          image: "temporalio/admin-tools:1.28.1-tctl-1.18.4-cli-1.4.1"
+          imagePullPolicy: IfNotPresent
+          env:
+            # TEMPORAL_CLI_ADDRESS is deprecated, use TEMPORAL_ADDRESS instead
+            - name: TEMPORAL_CLI_ADDRESS
+              value: temporal-frontend:7233
+            - name: TEMPORAL_ADDRESS
+              value: temporal-frontend:7233
+          livenessProbe:
+              exec:
+                command:
+                - ls
+                - /
+              initialDelaySeconds: 5
+              periodSeconds: 5
