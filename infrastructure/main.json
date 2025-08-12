@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.37.4.10188",
-      "templateHash": "17603301964017308425"
+      "templateHash": "1168074040703031376"
     }
   },
   "parameters": {
@@ -114,9 +114,9 @@
             "osType": "Linux",
             "mode": "System",
             "enableAutoScaling": true,
-            "minCount": 5,
+            "minCount": 3,
             "maxCount": 5,
-            "maxPods": 60
+            "maxPods": 80
           }
         ],
         "servicePrincipalProfile": {
