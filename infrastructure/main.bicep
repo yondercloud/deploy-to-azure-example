@@ -55,7 +55,7 @@ resource aksCluster 'Microsoft.ContainerService/managedClusters@2025-06-01' = {
         osType: 'Linux'
         mode: 'System'
         enableAutoScaling: true
-        minCount: 3
+        minCount: 5
         maxCount: 5
         maxPods: 80
       }
